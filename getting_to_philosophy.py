@@ -4,8 +4,8 @@ import requests
 from bs4 import BeautifulSoup as bs, NavigableString
 
 WIKI_URL = 'https://en.wikipedia.org'
-MAX_HOPS = 256
-hops = 0
+MAX_DEPTH = 256
+depth = 0
 
 ###############
 #  FUNCTIONS  #
@@ -17,7 +17,7 @@ hops = 0
   @param link 'a' tag element parsed with BeautifulSoup.
   @return True if link is valid; False otherwise.
 """
-def link_filter(link):
+def is_valid_link(link):
   if link == "":
     return False
   if re.match(r'/wiki/(Help|File|Wikipedia):.*', link):
@@ -93,7 +93,7 @@ def get_main_links(link):
   # Return all links from each section of article
   for s in sections:
     remove_parens(s)
-    links = filter(link_filter, map(extract_link, s.find_all('a')))
+    links = filter(is_valid_link, map(extract_link, s.find_all('a')))
     for l in links:
       yield WIKI_URL + l
   yield None # to prevent exceptions from running out of links
@@ -108,21 +108,21 @@ def get_main_links(link):
 """
 def get_to_philosophy(start_url):
   # Reset variables
-  global hops
+  global depth
   visited = set([start_url])
   url_stack = [{ 'url': start_url, 'links': get_main_links(start_url) }]
-  hops = 0
+  depth = 0
 
   def recursion_helper(url):
-    global hops
+    global depth
     print(url)
 
     # Base case
-    if hops >= MAX_HOPS:
-      print(f'\n Too many hops: reached max limit ({hops}) before finding Philosophy')
+    if depth >= MAX_DEPTH:
+      print(f'\n Too many hops: reached max limit ({depth}) before finding Philosophy')
       return True
-    if 'Philosophy' in url:
-      print(f'\nSuccessfully found Philosophy in {hops} hops!')
+    if url.endswith('/Philosophy'):
+      print(f'\nSuccessfully found Philosophy in {depth} hops!')
       return True
 
     current = url_stack.pop()
@@ -131,20 +131,19 @@ def get_to_philosophy(start_url):
     # Recursive case
     while next_link is not None:
       if next_link not in visited:
-        hops += 1
+        depth += 1
         visited.add(next_link)
-        url_stack.append({
-          'url': next_link,
-          'links': get_main_links(next_link)
-        })
+        url_stack.append({'url': next_link, 'links': get_main_links(next_link)})
+        
         halt_program = recursion_helper(next_link)
         if halt_program:
           return True
       
       next_link = next(current['links'])
     
+    # Backtracks to previous URL
     if next_link == None:
-      hops -= 1
+      depth -= 1
   
   recursion_helper(start_url)
 
@@ -159,7 +158,7 @@ if __name__ == '__main__':
   
   start_url = sys.argv[1]
   if re.match(r'https?://en.wikipedia.org/wiki/.*', start_url):
-    if link_filter(start_url.split('/')[-1]):
+    if is_valid_link(start_url.split('/')[-1]):
       get_to_philosophy(start_url)
       sys.exit(0)
   

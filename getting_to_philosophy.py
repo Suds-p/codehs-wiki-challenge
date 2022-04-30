@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup as bs, NavigableString
 
 WIKI_URL = 'https://en.wikipedia.org'
 MAX_HOPS = 256
+hops = 0
 
 ###############
 #  FUNCTIONS  #
@@ -28,12 +29,27 @@ def link_filter(link):
   return True
 
 
-# Returns base URL from a given 'a' tag without any sections in URL
-def extract_link(link):
-  return link['href'].split('#')[0]
+"""
+  Returns base URL from a given 'a' Tag without any sections in the URL.
+  For example, if href was 'http://example.org#Section1', the function 
+  will return 'http://example.org'.
+
+  @param a_tag An 'a' tag element parsed with BeautifulSoup.
+  @return String coming from href attribute without any hashtag sections.
+"""
+def extract_link(a_tag):
+  return a_tag['href'].split('#')[0]
 
 
-# Return given element with all text in parentheses removed
+"""
+  Mutates a given BeautifulSoup tag to remove any elements within the first pair
+  of parentheses in the tag's contents. The contents are available as a list
+  accessible via indexes. The function starts/stops when encountering string 
+  elements that contain either '(' or ')'.
+
+  @param elem A BeautifulSoup Tag element.
+  @return Same element with contents mutated.
+"""
 def remove_parens(elem):
   extracting = False
 
@@ -71,12 +87,13 @@ def get_main_links(link):
   page = requests.get(link)
   soup = bs(page.content, 'html.parser')
   main_content = soup.select_one('#mw-content-text .mw-parser-output')
-  # Only return direct descendants with no attributes
+  # Finds all paragraph sections of article, using recursive=False for direct descendants
   sections = main_content.find_all('p', id=False, class_=False, recursive=False)
 
+  # Return all links from each section of article
   for s in sections:
     remove_parens(s)
-    links = list(filter(link_filter, map(extract_link, s.find_all('a'))))
+    links = filter(link_filter, map(extract_link, s.find_all('a')))
     for l in links:
       yield WIKI_URL + l
   yield None # to prevent exceptions from running out of links
@@ -89,9 +106,8 @@ def get_main_links(link):
 
   @param url A string URL to a valid Wikipedia article.  
 """
-hops = 0
-
 def get_to_philosophy(start_url):
+  # Reset variables
   global hops
   visited = set([start_url])
   url_stack = [{ 'url': start_url, 'links': get_main_links(start_url) }]
@@ -121,8 +137,8 @@ def get_to_philosophy(start_url):
           'url': next_link,
           'links': get_main_links(next_link)
         })
-        result = recursion_helper(next_link)
-        if result:
+        halt_program = recursion_helper(next_link)
+        if halt_program:
           return True
       
       next_link = next(current['links'])
